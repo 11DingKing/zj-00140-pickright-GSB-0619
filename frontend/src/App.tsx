@@ -5,7 +5,6 @@ import {
   SearchOutlined,
   TrophyOutlined,
   ThunderboltOutlined,
-  StarOutlined,
   FormOutlined,
   ShoppingOutlined,
   BellOutlined,

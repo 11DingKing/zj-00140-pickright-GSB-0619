@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../utils/prisma';
+import { dispatchAllergenWarningForProfile } from '../services/notificationService';
 
 export const getCurrentParent = async (req: Request, res: Response) => {
   try {
@@ -119,9 +120,12 @@ export const addAllergenProfile = async (req: Request, res: Response) => {
       },
     });
 
+    const notifiedCount = await dispatchAllergenWarningForProfile(parentId);
+
     res.json({
       success: true,
       data: profile,
+      notifiedCount,
     });
   } catch (error) {
     console.error('添加过敏原档案失败:', error);
@@ -157,9 +161,12 @@ export const updateAllergenProfile = async (req: Request, res: Response) => {
       },
     });
 
+    const notifiedCount = await dispatchAllergenWarningForProfile(parentId);
+
     res.json({
       success: true,
       data: updated,
+      notifiedCount,
     });
   } catch (error) {
     console.error('更新过敏原档案失败:', error);

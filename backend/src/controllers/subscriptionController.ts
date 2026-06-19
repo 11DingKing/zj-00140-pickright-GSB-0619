@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../utils/prisma';
+import { dispatchAllergenWarningForSubscription } from '../services/notificationService';
 
 export const getSubscriptions = async (req: Request, res: Response) => {
   try {
@@ -74,6 +75,7 @@ export const addSubscription = async (req: Request, res: Response) => {
           where: { id: existing.id },
           data: { isActive: true, notifyOnAdverseReaction, notifyOnInspection },
         });
+        await dispatchAllergenWarningForSubscription(parentId, parseInt(productId));
         return res.json({
           success: true,
           data: updated,
@@ -91,6 +93,8 @@ export const addSubscription = async (req: Request, res: Response) => {
         notifyOnInspection,
       },
     });
+
+    await dispatchAllergenWarningForSubscription(parentId, parseInt(productId));
 
     res.json({
       success: true,

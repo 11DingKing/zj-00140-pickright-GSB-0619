@@ -1,4 +1,5 @@
 import prisma from './utils/prisma';
+import { checkAndNotifyAllergenOnSubscribe } from './utils/notificationService';
 
 // 品牌数据
 const brands = [
@@ -956,6 +957,7 @@ async function main() {
   ];
 
   const createdSubscriptions: any[] = [];
+  let allergenWarningCount = 0;
   for (const sub of subscriptions) {
     if (sub.productIndex >= 0 && sub.productIndex < createdProducts.length && sub.parentId) {
       try {
@@ -968,77 +970,98 @@ async function main() {
           },
         });
         createdSubscriptions.push(s);
+        const warned = await checkAndNotifyAllergenOnSubscribe(
+          sub.parentId,
+          createdProducts[sub.productIndex],
+        );
+        allergenWarningCount += warned;
       } catch (e) {
         // 忽略重复订阅
       }
     }
   }
-  console.log(`📩 已创建 ${subscriptions.length} 条产品订阅`);
+  console.log(
+    `📩 已创建 ${subscriptions.length} 条产品订阅，${allergenWarningCount} 条过敏原警告通知`,
+  );
 
   // 创建通知 - 针对已有不良反应和抽检结果
-  const notifications = [];
+  let totalNotifications = allergenWarningCount;
 
   // 为已有不良反应创建通知
-  for (let i = 0; i < Math.min(2, adverseReactions.length); i++) {
-    const ar = adverseReactions[i];
+  for (const ar of adverseReactions) {
     const productIndex = ar.productId - 1;
     if (productIndex >= 0 && productIndex < createdProducts.length) {
-      // 查找订阅了该产品的家长
+      const actualProductId = createdProducts[productIndex].id;
       const subs = await prisma.productSubscription.findMany({
         where: {
-          productId: createdProducts[productIndex].id,
+          productId: actualProductId,
           isActive: true,
           notifyOnAdverseReaction: true,
         },
       });
 
+      const createdAr = await prisma.adverseReaction.findFirst({
+        where: {
+          productId: actualProductId,
+          title: ar.title,
+        },
+      });
+
       for (const sub of subs) {
-        notifications.push({
-          parentId: sub.parentId,
-          type: 'adverse_reaction',
-          title: `⚠️ 订阅产品不良反应通报`,
-          content: `您关注的「${createdProducts[productIndex].name}」被通报新的不良反应：${ar.description}`,
-          productId: createdProducts[productIndex].id,
-          relatedId: i + 1,
+        await prisma.notification.create({
+          data: {
+            parentId: sub.parentId,
+            type: 'adverse_reaction',
+            title: `⚠️ 订阅产品不良反应通报`,
+            content: `您关注的「${createdProducts[productIndex].name}」被通报新的不良反应：${ar.description}`,
+            productId: actualProductId,
+            relatedId: createdAr?.id,
+          },
         });
+        totalNotifications++;
       }
     }
   }
 
   // 为已有抽检不合格创建通知
-  for (let i = 0; i < Math.min(2, inspectionResults.length); i++) {
-    const ir = inspectionResults[i];
+  for (const ir of inspectionResults) {
     if (ir.result === '不合格') {
       const productIndex = ir.productId - 1;
       if (productIndex >= 0 && productIndex < createdProducts.length) {
+        const actualProductId = createdProducts[productIndex].id;
         const subs = await prisma.productSubscription.findMany({
           where: {
-            productId: createdProducts[productIndex].id,
+            productId: actualProductId,
             isActive: true,
             notifyOnInspection: true,
           },
         });
 
+        const createdIr = await prisma.inspectionResult.findFirst({
+          where: {
+            productId: actualProductId,
+            inspectionOrg: ir.inspectionOrg,
+          },
+        });
+
         for (const sub of subs) {
-          notifications.push({
-            parentId: sub.parentId,
-            type: 'inspection_failed',
-            title: `🚨 订阅产品抽检不合格`,
-            content: `您关注的「${createdProducts[productIndex].name}」抽检不合格，不合格项：${ir.unqualifiedItems}`,
-            productId: createdProducts[productIndex].id,
-            relatedId: i + 1,
+          await prisma.notification.create({
+            data: {
+              parentId: sub.parentId,
+              type: 'inspection_failed',
+              title: `🚨 订阅产品抽检不合格`,
+              content: `您关注的「${createdProducts[productIndex].name}」抽检不合格，不合格项：${ir.unqualifiedItems}`,
+              productId: actualProductId,
+              relatedId: createdIr?.id,
+            },
           });
+          totalNotifications++;
         }
       }
     }
   }
 
-  for (const notif of notifications) {
-    await prisma.notification.create({
-      data: notif,
-    });
-  }
-  console.log(`🔔 已创建 ${notifications.length} 条推送通知`);
+  console.log(`🔔 已创建 ${totalNotifications} 条推送通知`);
 
   console.log(`
 ╔══════════════════════════════════════════════════════════╗
@@ -1056,7 +1079,7 @@ async function main() {
 ║      家长用户: ${createdParents.length} 个                                      ║
 ║      过敏原档案: ${allergenProfiles.length} 条                                   ║
 ║      产品订阅: ${subscriptions.length} 条                                     ║
-║      推送通知: ${notifications.length} 条                                     ║
+║      推送通知: ${totalNotifications} 条                                     ║
 ║                                                          ║
 ║   👤 测试家长账号 (x-parent-id):                         ║
 ║      1 - 王妈妈 (5岁敏感肌, 对香精/胭脂红过敏)          ║

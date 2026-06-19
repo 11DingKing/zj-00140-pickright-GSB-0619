@@ -253,4 +253,36 @@ export const getUnreadCount = () => {
   }>('/parent/notifications/unread-count');
 };
 
+export const createAdverseReaction = (data: {
+  productId: number;
+  title: string;
+  description: string;
+  reportDate?: string;
+  source: string;
+  severity: string;
+}) => {
+  return api.post<{
+    success: boolean;
+    data: AdverseReaction;
+    notifiedCount: number;
+    message: string;
+  }>('/reports/adverse-reactions', data);
+};
+
+export const createInspectionResult = (data: {
+  productId: number;
+  inspectionOrg: string;
+  inspectionDate?: string;
+  result: string;
+  unqualifiedItems?: string;
+  source: string;
+}) => {
+  return api.post<{
+    success: boolean;
+    data: InspectionResult;
+    notifiedCount: number;
+    message: string;
+  }>('/reports/inspection-results', data);
+};
+
 export default api;

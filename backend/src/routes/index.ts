@@ -3,6 +3,7 @@ import { searchProducts, getProductDetail, getCategories } from '../controllers/
 import { getWhitelist, getBlacklist, getTrustRank } from '../controllers/listController';
 import { getRecommendedProducts } from '../controllers/recommendController';
 import { createReview, getMyReviews, getProductReviews } from '../controllers/reviewController';
+import { createAdverseReaction, createInspectionResult } from '../controllers/reportController';
 import {
   getCurrentParent,
   updateParent,
@@ -41,6 +42,10 @@ router.get('/lists/trust-rank', getTrustRank);
 // 评价相关接口
 router.post('/reviews', createReview);
 router.get('/reviews/my', getMyReviews);
+
+// 报告录入接口（不良反应/抽检结果）
+router.post('/reports/adverse-reactions', createAdverseReaction);
+router.post('/reports/inspection-results', createInspectionResult);
 
 // 用户相关接口
 router.get('/parent/me', getCurrentParent);

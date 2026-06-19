@@ -1,5 +1,11 @@
 import { Router } from 'express';
-import { searchProducts, getProductDetail, getCategories } from '../controllers/productController';
+import {
+  searchProducts,
+  getProductDetail,
+  getCategories,
+  createAdverseReaction,
+  createInspectionResult,
+} from '../controllers/productController';
 import { getWhitelist, getBlacklist, getTrustRank } from '../controllers/listController';
 import { getRecommendedProducts } from '../controllers/recommendController';
 import { createReview, getMyReviews, getProductReviews } from '../controllers/reviewController';
@@ -32,6 +38,8 @@ router.get('/products/recommend', getRecommendedProducts);
 router.post('/products/recommend', getRecommendedProducts);
 router.get('/products/:id', getProductDetail);
 router.get('/products/:productId/reviews', getProductReviews);
+router.post('/products/adverse-reactions', createAdverseReaction);
+router.post('/products/inspection-results', createInspectionResult);
 
 // 榜单相关接口
 router.get('/lists/whitelist', getWhitelist);

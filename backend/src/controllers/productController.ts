@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import prisma from '../utils/prisma';
 import { getTrustLevel, calculateTrustIndex, isBlacklistedProduct } from '../utils/trustIndex';
 import { checkProductAllergens } from '../utils/allergen';
+import { notifyAdverseReaction, notifyInspectionFailed } from '../utils/notificationService';
 
 // 搜索产品（按产品名或备案号）
 export const searchProducts = async (req: Request, res: Response) => {
@@ -231,3 +232,128 @@ export const getCategories = async (_req: Request, res: Response) => {
     res.status(500).json({ error: '获取分类失败' });
   }
 };
+
+export const createAdverseReaction = async (req: Request, res: Response) => {
+  try {
+    const { productId, title, description, reportDate, source, severity } = req.body;
+
+    if (!productId || !title || !description || !reportDate || !source || !severity) {
+      return res.status(400).json({ error: '请填写完整信息' });
+    }
+
+    const product = await prisma.product.findUnique({
+      where: { id: parseInt(productId) },
+    });
+
+    if (!product) {
+      return res.status(404).json({ error: '产品不存在' });
+    }
+
+    const adverseReaction = await prisma.adverseReaction.create({
+      data: {
+        productId: parseInt(productId),
+        title,
+        description,
+        reportDate: new Date(reportDate),
+        source,
+        severity,
+      },
+      include: {
+        product: true,
+      },
+    });
+
+    const notifyResult = await notifyAdverseReaction(adverseReaction);
+
+    await recalculateProductTrustIndex(parseInt(productId));
+
+    res.json({
+      success: true,
+      data: adverseReaction,
+      notifications: notifyResult,
+      message: `不良反应通报已创建，已向 ${notifyResult.created} 位订阅家长发送通知`,
+    });
+  } catch (error) {
+    console.error('创建不良反应通报失败:', error);
+    res.status(500).json({ error: '创建失败' });
+  }
+};
+
+export const createInspectionResult = async (req: Request, res: Response) => {
+  try {
+    const { productId, inspectionOrg, inspectionDate, result, unqualifiedItems, source } = req.body;
+
+    if (!productId || !inspectionOrg || !inspectionDate || !result || !source) {
+      return res.status(400).json({ error: '请填写完整信息' });
+    }
+
+    const product = await prisma.product.findUnique({
+      where: { id: parseInt(productId) },
+    });
+
+    if (!product) {
+      return res.status(404).json({ error: '产品不存在' });
+    }
+
+    const inspectionResult = await prisma.inspectionResult.create({
+      data: {
+        productId: parseInt(productId),
+        inspectionOrg,
+        inspectionDate: new Date(inspectionDate),
+        result,
+        unqualifiedItems: unqualifiedItems || null,
+        source,
+      },
+      include: {
+        product: true,
+      },
+    });
+
+    let notifyResult = { created: 0, parentIds: [] as number[] };
+    if (result === '不合格') {
+      notifyResult = await notifyInspectionFailed(inspectionResult);
+    }
+
+    await recalculateProductTrustIndex(parseInt(productId));
+
+    res.json({
+      success: true,
+      data: inspectionResult,
+      notifications: notifyResult,
+      message:
+        result === '不合格'
+          ? `抽检结果已创建，已向 ${notifyResult.created} 位订阅家长发送通知`
+          : '抽检结果已创建',
+    });
+  } catch (error) {
+    console.error('创建抽检结果失败:', error);
+    res.status(500).json({ error: '创建失败' });
+  }
+};
+
+async function recalculateProductTrustIndex(productId: number) {
+  const productWithRelations = await prisma.product.findUnique({
+    where: { id: productId },
+    include: {
+      brand: {
+        include: {
+          blacklist: true,
+        },
+      },
+      reviews: true,
+      adverseReactions: true,
+      inspectionResults: true,
+      blacklist: true,
+    },
+  });
+
+  if (productWithRelations) {
+    const newTrustIndex = calculateTrustIndex({
+      product: productWithRelations as any,
+    });
+    await prisma.product.update({
+      where: { id: productId },
+      data: { trustIndex: newTrustIndex },
+    });
+  }
+}

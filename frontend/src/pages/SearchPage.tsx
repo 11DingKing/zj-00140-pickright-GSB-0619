@@ -7,8 +7,8 @@ import {
   InfoCircleOutlined,
 } from '@ant-design/icons';
 import ProductCard from '../components/ProductCard';
-import { searchProducts, getCategories } from '../services/api';
-import type { Product, Category } from '../types';
+import { searchProducts } from '../services/api';
+import type { Product } from '../types';
 import { CATEGORY_OPTIONS } from '../types';
 
 const { Search } = Input;
@@ -20,16 +20,7 @@ const SearchPage: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [error, setError] = useState<string | null>(null);
-
-  React.useEffect(() => {
-    getCategories().then((res) => {
-      if (res.data.success) {
-        setCategories(res.data.data);
-      }
-    }).catch(() => {});
-  }, []);
 
   const handleSearch = async (value: string) => {
     if (!value.trim()) {

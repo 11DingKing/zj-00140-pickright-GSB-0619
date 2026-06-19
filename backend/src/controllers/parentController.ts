@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../utils/prisma';
+import { checkAndNotifyAllergensForAllSubscriptions } from '../utils/notificationService';
 
 export const getCurrentParent = async (req: Request, res: Response) => {
   try {
@@ -119,9 +120,18 @@ export const addAllergenProfile = async (req: Request, res: Response) => {
       },
     });
 
+    const notifResult = await checkAndNotifyAllergensForAllSubscriptions(parentId);
+
     res.json({
       success: true,
-      data: profile,
+      data: {
+        ...profile,
+        notificationsGenerated: notifResult.created,
+      },
+      message:
+        notifResult.created > 0
+          ? `过敏原档案已添加，已为 ${notifResult.created} 个订阅产品生成过敏原警告通知`
+          : '过敏原档案已添加',
     });
   } catch (error) {
     console.error('添加过敏原档案失败:', error);

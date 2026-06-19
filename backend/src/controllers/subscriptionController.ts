@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../utils/prisma';
+import { checkAndNotifyAllergenOnSubscribe } from '../utils/notificationService';
 
 export const getSubscriptions = async (req: Request, res: Response) => {
   try {
@@ -68,34 +69,38 @@ export const addSubscription = async (req: Request, res: Response) => {
       },
     });
 
+    let subscription;
+    let message = '订阅成功';
+
     if (existing) {
       if (!existing.isActive) {
-        const updated = await prisma.productSubscription.update({
+        subscription = await prisma.productSubscription.update({
           where: { id: existing.id },
           data: { isActive: true, notifyOnAdverseReaction, notifyOnInspection },
         });
-        return res.json({
-          success: true,
-          data: updated,
-          message: '已重新订阅',
-        });
+        message = '已重新订阅';
+      } else {
+        return res.status(400).json({ error: '已经订阅了该产品' });
       }
-      return res.status(400).json({ error: '已经订阅了该产品' });
+    } else {
+      subscription = await prisma.productSubscription.create({
+        data: {
+          parentId,
+          productId: parseInt(productId),
+          notifyOnAdverseReaction,
+          notifyOnInspection,
+        },
+      });
     }
 
-    const subscription = await prisma.productSubscription.create({
-      data: {
-        parentId,
-        productId: parseInt(productId),
-        notifyOnAdverseReaction,
-        notifyOnInspection,
-      },
-    });
+    let allergenNotified = 0;
+    allergenNotified = await checkAndNotifyAllergenOnSubscribe(parentId, product);
 
     res.json({
       success: true,
       data: subscription,
-      message: '订阅成功',
+      message,
+      allergenWarning: allergenNotified > 0,
     });
   } catch (error) {
     console.error('添加订阅失败:', error);

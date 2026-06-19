@@ -11,6 +11,8 @@ import type {
   AllergenProfile,
   ProductSubscription,
   Notification,
+  AdverseReaction,
+  InspectionResult,
 } from '../types';
 
 const api = axios.create({

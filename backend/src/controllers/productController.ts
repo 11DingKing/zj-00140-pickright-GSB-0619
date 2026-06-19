@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import prisma from '../utils/prisma';
 import { getTrustLevel, calculateTrustIndex, isBlacklistedProduct } from '../utils/trustIndex';
 import { checkProductAllergens } from '../utils/allergen';
+import { notifyAdverseReaction, notifyInspectionFailed } from '../utils/notificationService';
 
 // 搜索产品（按产品名或备案号）
 export const searchProducts = async (req: Request, res: Response) => {
@@ -229,5 +230,159 @@ export const getCategories = async (_req: Request, res: Response) => {
   } catch (error) {
     console.error('获取分类失败:', error);
     res.status(500).json({ error: '获取分类失败' });
+  }
+};
+
+export const createAdverseReaction = async (req: Request, res: Response) => {
+  try {
+    const { productId, title, description, reportDate, source, severity } = req.body;
+
+    if (!productId || !title || !description || !source || !severity) {
+      return res.status(400).json({ error: '请填写完整的通报信息' });
+    }
+
+    const product = await prisma.product.findUnique({
+      where: { id: parseInt(productId) },
+    });
+
+    if (!product) {
+      return res.status(404).json({ error: '产品不存在' });
+    }
+
+    const validSeverities = ['一般', '严重'];
+    if (!validSeverities.includes(severity)) {
+      return res.status(400).json({ error: '无效的严重程度' });
+    }
+
+    const adverseReaction = await prisma.adverseReaction.create({
+      data: {
+        productId: parseInt(productId),
+        title,
+        description,
+        reportDate: reportDate ? new Date(reportDate) : new Date(),
+        source,
+        severity,
+      },
+      include: {
+        product: true,
+      },
+    });
+
+    const productWithRelations = await prisma.product.findUnique({
+      where: { id: parseInt(productId) },
+      include: {
+        brand: {
+          include: {
+            blacklist: true,
+          },
+        },
+        reviews: true,
+        adverseReactions: true,
+        inspectionResults: true,
+        blacklist: true,
+      },
+    });
+
+    if (productWithRelations) {
+      const newTrustIndex = calculateTrustIndex({
+        product: productWithRelations as any,
+      });
+      await prisma.product.update({
+        where: { id: parseInt(productId) },
+        data: { trustIndex: newTrustIndex },
+      });
+    }
+
+    const notifiedCount = await notifyAdverseReaction(adverseReaction);
+
+    res.json({
+      success: true,
+      data: adverseReaction,
+      notifiedCount,
+      message: `不良反应通报已录入，已通知 ${notifiedCount} 位订阅家长`,
+    });
+  } catch (error) {
+    console.error('录入不良反应通报失败:', error);
+    res.status(500).json({ error: '录入失败，请稍后重试' });
+  }
+};
+
+export const createInspectionResult = async (req: Request, res: Response) => {
+  try {
+    const { productId, inspectionOrg, inspectionDate, result, unqualifiedItems, source } = req.body;
+
+    if (!productId || !inspectionOrg || !result || !source) {
+      return res.status(400).json({ error: '请填写完整的抽检信息' });
+    }
+
+    const product = await prisma.product.findUnique({
+      where: { id: parseInt(productId) },
+    });
+
+    if (!product) {
+      return res.status(404).json({ error: '产品不存在' });
+    }
+
+    const validResults = ['合格', '不合格'];
+    if (!validResults.includes(result)) {
+      return res.status(400).json({ error: '无效的抽检结果' });
+    }
+
+    const inspectionResult = await prisma.inspectionResult.create({
+      data: {
+        productId: parseInt(productId),
+        inspectionOrg,
+        inspectionDate: inspectionDate ? new Date(inspectionDate) : new Date(),
+        result,
+        unqualifiedItems: result === '不合格' ? unqualifiedItems || null : null,
+        source,
+      },
+      include: {
+        product: true,
+      },
+    });
+
+    const productWithRelations = await prisma.product.findUnique({
+      where: { id: parseInt(productId) },
+      include: {
+        brand: {
+          include: {
+            blacklist: true,
+          },
+        },
+        reviews: true,
+        adverseReactions: true,
+        inspectionResults: true,
+        blacklist: true,
+      },
+    });
+
+    if (productWithRelations) {
+      const newTrustIndex = calculateTrustIndex({
+        product: productWithRelations as any,
+      });
+      await prisma.product.update({
+        where: { id: parseInt(productId) },
+        data: { trustIndex: newTrustIndex },
+      });
+    }
+
+    let notifiedCount = 0;
+    if (result === '不合格') {
+      notifiedCount = await notifyInspectionFailed(inspectionResult);
+    }
+
+    res.json({
+      success: true,
+      data: inspectionResult,
+      notifiedCount,
+      message:
+        result === '不合格'
+          ? `抽检不合格记录已录入，已通知 ${notifiedCount} 位订阅家长`
+          : '抽检合格记录已录入',
+    });
+  } catch (error) {
+    console.error('录入抽检结果失败:', error);
+    res.status(500).json({ error: '录入失败，请稍后重试' });
   }
 };

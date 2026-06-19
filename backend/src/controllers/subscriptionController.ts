@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../utils/prisma';
+import { checkProductAndNotifyAllergens } from '../utils/notificationService';
 
 export const getSubscriptions = async (req: Request, res: Response) => {
   try {
@@ -74,10 +75,20 @@ export const addSubscription = async (req: Request, res: Response) => {
           where: { id: existing.id },
           data: { isActive: true, notifyOnAdverseReaction, notifyOnInspection },
         });
+
+        let allergenWarningNotified = false;
+        try {
+          allergenWarningNotified = await checkProductAndNotifyAllergens(product, parentId);
+        } catch (e) {
+          console.error('过敏原通知检查失败:', e);
+        }
+
         return res.json({
           success: true,
           data: updated,
-          message: '已重新订阅',
+          message: allergenWarningNotified
+            ? '已重新订阅，检测到该产品含有您关注的过敏原，请查看通知中心'
+            : '已重新订阅',
         });
       }
       return res.status(400).json({ error: '已经订阅了该产品' });
@@ -92,10 +103,19 @@ export const addSubscription = async (req: Request, res: Response) => {
       },
     });
 
+    let allergenWarningNotified = false;
+    try {
+      allergenWarningNotified = await checkProductAndNotifyAllergens(product, parentId);
+    } catch (e) {
+      console.error('过敏原通知检查失败:', e);
+    }
+
     res.json({
       success: true,
       data: subscription,
-      message: '订阅成功',
+      message: allergenWarningNotified
+        ? '订阅成功，检测到该产品含有您关注的过敏原，请查看通知中心'
+        : '订阅成功',
     });
   } catch (error) {
     console.error('添加订阅失败:', error);

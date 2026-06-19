@@ -25,8 +25,6 @@ import {
   FormOutlined,
   WarningOutlined,
   CheckCircleOutlined,
-  ExclamationCircleOutlined,
-  SafetyOutlined,
   PlusOutlined,
 } from '@ant-design/icons';
 import { getMyReviews, createReview, searchProducts } from '../services/api';
@@ -40,7 +38,7 @@ const ReviewPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('my-reviews');
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
-  const [modalVisible, setModalVisible] = useState(false);
+  const [, setModalVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [productSearchResults, setProductSearchResults] = useState<Product[]>([]);
   const [searchingProducts, setSearchingProducts] = useState(false);
@@ -321,8 +319,15 @@ const ReviewPage: React.FC = () => {
                           {review.product.recordNumber}
                         </Descriptions.Item>
                         <Descriptions.Item label="放心指数">
-                          <span style={{ color: review.product.trustLevel?.color || '#1890ff', fontWeight: 600 }}>
-                            {typeof review.product.trustIndex === 'number' ? review.product.trustIndex.toFixed(1) : review.product.trustIndex || '-'}
+                          <span
+                            style={{
+                              color: review.product.trustLevel?.color || '#1890ff',
+                              fontWeight: 600,
+                            }}
+                          >
+                            {typeof review.product.trustIndex === 'number'
+                              ? review.product.trustIndex.toFixed(1)
+                              : review.product.trustIndex || '-'}
                           </span>
                         </Descriptions.Item>
                       </Descriptions>

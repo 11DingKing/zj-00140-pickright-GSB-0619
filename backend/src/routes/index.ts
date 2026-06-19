@@ -22,6 +22,14 @@ import {
   markAllNotificationsRead,
   getUnreadCount,
 } from '../controllers/subscriptionController';
+import {
+  createAdverseReaction,
+  getAdverseReactionsByProduct,
+} from '../controllers/adverseReactionController';
+import {
+  createInspectionResult,
+  getInspectionResultsByProduct,
+} from '../controllers/inspectionController';
 
 const router = Router();
 
@@ -64,5 +72,13 @@ router.get('/parent/notifications', getNotifications);
 router.put('/parent/notifications/:id/read', markNotificationRead);
 router.put('/parent/notifications/read-all', markAllNotificationsRead);
 router.get('/parent/notifications/unread-count', getUnreadCount);
+
+// 不良反应通报录入与查询
+router.post('/admin/adverse-reactions', createAdverseReaction);
+router.get('/products/:productId/adverse-reactions', getAdverseReactionsByProduct);
+
+// 抽检结果录入与查询
+router.post('/admin/inspection-results', createInspectionResult);
+router.get('/products/:productId/inspection-results', getInspectionResultsByProduct);
 
 export default router;
